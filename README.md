@@ -92,7 +92,7 @@ $ python3 aqara_firmware.py --region EU --did lumi1.123456789abc --userid 12345 
 ## Notes
 
 - The DID must belong to a device on the logged-in account, and the region must be the server that account is registered on.
-- A device DID can found in the Aqara App settings for your device, usually called "Accessory ID".
+- A device DID can found in the Aqara App settings for your device, usually called "Accessory ID". They usually start with lumi. lumi1. or lumi3.
 - If no update is on offer, `upgradeFirmware` may be empty or missing.
 - Tokens expire. If a run returns code `108`, log in again with username/password.
 - The script does not download firmware. Use `downloadUrl` from the response, and check the file against `firmwareMD5`.
