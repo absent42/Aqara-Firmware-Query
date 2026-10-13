@@ -30,7 +30,12 @@ Installed firmware: 1.3.6_0003.0099
 
    1. [zigbee] 1.3.6_0003.0099 -> 1.3.6_0003.0100  (2.4 MB)
         20250923130946_lumi.motion.agl001_radar_V0100_20250920_445ED8.bin
-        Fix known issues
+        Released:     2025-09-23 05:09 UTC
+        MD5:          0123456789abcdef0123456789445ed8
+        CRC32:        1A2B3C4D
+        Install time: ~60 s
+        URL:          https://cdn.aqara.com/cdn/opencloud-product/.../20250923130946_lumi.motion.agl001_radar_V0100_20250920_445ED8.bin
+        Update log:   Fix known issues
 
 [d]ownload, show [j]son or [q]uit? [d]
 Download directory [.]: firmware
@@ -38,9 +43,12 @@ Download directory [.]: firmware
 Downloading 20250923130946_lumi.motion.agl001_radar_V0100_20250920_445ED8.bin
   [##############################] 100%  2.4 MB / 2.4 MB  8.4 MB/s
   saved firmware/20250923130946_lumi.motion.agl001_radar_V0100_20250920_445ED8.bin (size and MD5 verified)
+  metadata firmware/20250923130946_lumi.motion.agl001_radar_V0100_20250920_445ED8.bin.json
 ```
 
-Downloads are checked against `fileSize` and `firmwareMD5`; a mismatching file is deleted.
+Each offered update shows the fields the server returned: release date (UTC), `firmwareMD5`, `firmwareCRC32`, `firmwareSha256` (when not empty), whether it is mandatory, the expected install time, `downloadUrl` and `updateLog`.
+
+Downloads are checked against `fileSize` and `firmwareMD5`; a mismatching file is deleted. See [Downloads](#downloads) for the metadata file saved next to each firmware file.
 
 ### Scripted
 
@@ -66,7 +74,7 @@ On a successful username/password login the script prints a line (to stderr) you
 | `--region` | yes | Server region, one of: `EU`, `US`, `CN`, `RU`, `KR`, `AU`. A server host (`rpc-ger.aqara.com`) or full URL (`https://rpc-ger.aqara.com`) is also accepted. |
 | `--did` | no | Device DID, e.g. `lumi1.123456789abc`. Prints the JSON response. If omitted, the script lists your devices, shows what is offered and asks whether to download it or show the JSON. |
 | `--list` | no | Print the account's devices (`did`, `model`, `deviceName`, `firmwareVersion`) as JSON and exit. |
-| `--download` | no | Directory to download the offered firmware into (interactive mode asks if omitted). Each file is checked against `fileSize` and `firmwareMD5`; a mismatch deletes it and exits with code `1`. |
+| `--download` | no | Directory to download the offered firmware into (interactive mode asks if omitted). Each file is checked against `fileSize` and `firmwareMD5`; a mismatch deletes it and exits with code `1`. A `<file>.json` with the update's full metadata is written next to each verified file. |
 | `--username` | no | Aqara account username (email or phone). Prompted if omitted and no token is given. |
 | `--password` | no | Aqara account password. Prompted (hidden) if omitted and no token is given. |
 | `--userid` | no | Reuse a previous login's user id (with `--token`). |
@@ -112,6 +120,44 @@ Reuse the printed token to skip the login:
 $ python3 aqara_firmware.py --region EU --did lumi1.123456789abc --userid 12345 --token abcdef...
 ```
 
+Run with `--help` for a summary of the modes, options, regions and examples.
+
+## Downloads
+
+Each downloaded file is saved into the download directory under the server's file name and checked against `fileSize` and `firmwareMD5`. Once it passes, a metadata file with the same name plus `.json` is written alongside it, holding the full server entry for that update:
+
+```
+firmware/
+  firmwarefilename.ota
+  firmwarefilename.json
+```
+
+```
+{
+    "firmwareType": "main",
+    "deviceModel": "lumi.gateway.agl004",
+    "firmwareVersion": "4.5.70_0011",
+    "upgradeFirmware": {
+        "releaseDate": 1788748559000,
+        "downloadUrl": "https://cdn.aqara.com/cdn/opencloud-product/.../firmwarefilename.ota",
+        "upgradeTakesTime": 40,
+        "updateLog": "1. Optimized device-related functions 2. Fixed known issues",
+        "fileSize": 33638504,
+        "firmwareMD5": "12345567890abcd",
+        "firmwareCRC32": "06890B5B",
+        "firmwareVersion": "4.5.80_0007",
+        ...
+    },
+    "deviceName": "Hub M3",
+    "did": "lumi1.123456789abc",
+    ...
+}
+```
+
+This keeps the update details (versions, checksums, release date, update log) with the firmware, including in interactive mode where the JSON response is not printed when you choose to download. Timestamps such as `releaseDate` are milliseconds since the epoch.
+
+The metadata file includes your device DID, device name and home/room names (`real1Name`, `real2Name`, `realPositionId`, `real2PositionId`). Review it before sharing it with anyone.
+
 ## Output
 
 - The JSON response is printed to stdout unchanged (indented). Login and error messages go to stderr, so the output can be piped straight into a tool such as `jq`:
@@ -140,9 +186,9 @@ $ python3 aqara_firmware.py --region EU --did lumi1.123456789abc --userid 12345 
 - A device DID can found in the Aqara App settings for your device, usually called "Accessory ID". They usually start with lumi. lumi1. or lumi3. Not every app version shows it; `--list` prints it.
 - If no update is on offer, `upgradeFirmware` may be empty or missing.
 - Tokens expire. If a run returns code `108`, log in again with username/password.
-- Without `--download` the script does not download firmware. Use `downloadUrl` from the response, and check the file against `firmwareMD5`.
+- Without `--download` the script does not download firmware. Use `downloadUrl` from the response, and check the file against `firmwareMD5`. Firmware downloaded this way does not get a metadata file; save the JSON response yourself.
 - Some devices get more than one file. For example the Presence Sensor FP2 (`lumi.motion.agl001`) receives its radar firmware as a separate `zigbee` entry.
-- For use from Python, `AqaraClient` wraps a session: `AqaraClient.login(host, username, password)`, then `devices()`, `firmware(did)`, `offers(response)` and `download(offer, directory)`.
+- For use from Python, `AqaraClient` wraps a session: `AqaraClient.login(host, username, password)`, then `devices()`, `firmware(did)`, `offers(response)` and `download(offer, directory)`. `download()` only saves and verifies the firmware; the metadata file is written by the command-line script.
 
 ## Disclaimer
 
