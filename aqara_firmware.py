@@ -5,6 +5,8 @@ Given an Aqara account (username/password or userid/token), a server region, and
 device DID (e.g. lumi1.123456789abc), prints the server's OTA firmware response for that
 device as returned. Without --did, lists the account's devices and lets you pick one.
 With --download DIR, also downloads the offered firmware files and verifies their MD5.
+Each downloaded file gets a <file>.json alongside it holding the server's full metadata for
+that update (versions, MD5, CRC32, release date, download URL, update log, ...).
 
 For interoperability with devices you own. Not affiliated with Aqara. Use at your own
 risk. The embedded app credentials and RSA public key are already public/documented across
@@ -239,6 +241,14 @@ def pick_device(devices):
     return devices[int(choice) - 1]
 
 
+def fmt_date(ms):
+    """Server timestamps are milliseconds since the epoch; show them as UTC dates."""
+    try:
+        return time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(int(ms) / 1000))
+    except (TypeError, ValueError, OverflowError, OSError):
+        return None
+
+
 def show_offers(device, offers):
     """Human-readable summary of the firmware offered for `device`, on stderr."""
     print(f"\n{device.get('deviceName')} ({device.get('model')}, {device.get('did')})\n"
@@ -251,8 +261,20 @@ def show_offers(device, offers):
         size = mb(int(up["fileSize"])) if up.get("fileSize") else "size unknown"
         print(f"{i:>4}. [{o.get('firmwareType')}] {o.get('firmwareVersion')} -> {up.get('firmwareVersion')}  ({size})\n"
               f"        {os.path.basename(urllib.parse.urlparse(up['downloadUrl']).path)}", file=sys.stderr)
+        details = [
+            ("Released", fmt_date(up.get("releaseDate"))),
+            ("MD5", up.get("firmwareMD5")),
+            ("CRC32", up.get("firmwareCRC32")),
+            ("SHA256", up.get("firmwareSha256")),
+            ("Mandatory", "yes" if up.get("isForce") or up.get("isNecessary") else None),
+            ("Install time", f"~{up['upgradeTakesTime']} s" if up.get("upgradeTakesTime") else None),
+            ("URL", up.get("downloadUrl")),
+        ]
+        for label, value in details:
+            if value:
+                print(f"        {label + ':':<14}{value}", file=sys.stderr)
         if up.get("updateLog"):
-            print(f"        {' '.join(str(up['updateLog']).split())}", file=sys.stderr)
+            print(f"        {'Update log:':<14}{' '.join(str(up['updateLog']).split())}", file=sys.stderr)
 
 
 def download_all(client, offers, directory):
@@ -264,7 +286,10 @@ def download_all(client, offers, directory):
             path = client.download(o, directory, progress=bar)
         finally:
             bar.finish()
-        print(f"  saved {path} (size and MD5 verified)", file=sys.stderr)
+        meta = path + ".json"
+        with open(meta, "w", encoding="utf-8") as f:
+            json.dump(o, f, indent=4, ensure_ascii=False)
+        print(f"  saved {path} (size and MD5 verified)\n  metadata {meta}", file=sys.stderr)
 
 
 def resolve_host(region):
@@ -275,17 +300,59 @@ def resolve_host(region):
     return host if host.startswith(("http://", "https://")) else "https://" + host
 
 
+EPILOG = f"""\
+modes:
+  interactive   omit --did: pick a device from a list, see the offered update (versions,
+                size, release date, MD5/CRC32, download URL, update log), then download
+                it or print the raw JSON response
+  scripted      --did DID: print the server's JSON response to stdout unchanged; add
+                --download DIR to also download the offered firmware
+  list          --list: print the account's devices (did, model, name, firmware) as JSON
+
+authentication:
+  Log in with --username/--password (prompted for if omitted). After a successful login
+  the userid and token are printed; pass them back with --userid/--token next time to
+  skip the login. The account must be on the server for the chosen --region.
+
+downloads:
+  Firmware is saved into DIR under the server's file name and checked against the
+  expected size and MD5; a file that fails the check is deleted. Next to each verified
+  file a <file>.json is written with the server's full metadata for that update. That
+  JSON includes your device DID, name and home/room names, so review it before sharing.
+
+output:
+  JSON goes to stdout; prompts, progress and summaries go to stderr, so stdout can be
+  redirected to a file.
+
+regions (--region also accepts any server host):
+{chr(10).join(f'  {k:<4}{v.split("//")[1]}' for k, v in REGIONS.items())}
+
+examples:
+  %(prog)s --region EU
+  %(prog)s --region EU --list
+  %(prog)s --region EU --did lumi1.123456789abc > firmware.json
+  %(prog)s --region EU --did lumi1.123456789abc --download firmware/
+  %(prog)s --region rpc-ger.aqara.com --userid ID --token TOKEN
+"""
+
+
 def parse_args(argv=None):
-    ap = argparse.ArgumentParser(description="Query (and optionally download) the Aqara OTA firmware for a device on your account.")
+    ap = argparse.ArgumentParser(
+        description="Query (and optionally download) the Aqara OTA firmware for a device on your account.",
+        epilog=EPILOG, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--region", required=True,
                     help=f"server region ({', '.join(sorted(REGIONS))}) or host, e.g. rpc-ger.aqara.com")
     ap.add_argument("--did", help="device DID, e.g. lumi1.123456789abc; prints the JSON response "
                                   "(omit to pick a device interactively)")
     ap.add_argument("--list", action="store_true", help="print the account's devices as JSON and exit")
-    ap.add_argument("--download", metavar="DIR", help="download the offered firmware into DIR and verify "
-                                                      "size and MD5 (interactive mode asks if omitted)")
-    ap.add_argument("--username"); ap.add_argument("--password")
-    ap.add_argument("--userid"); ap.add_argument("--token")
+    ap.add_argument("--download", metavar="DIR", help="download the offered firmware into DIR, verify "
+                                                      "size and MD5 and write a <file>.json with its full "
+                                                      "metadata (interactive mode asks if omitted)")
+    auth = ap.add_argument_group("authentication")
+    auth.add_argument("--username", help="Aqara account email or phone number (prompted if omitted)")
+    auth.add_argument("--password", help="Aqara account password (prompted without echo if omitted)")
+    auth.add_argument("--userid", help="userid from a previous login; use with --token to skip logging in")
+    auth.add_argument("--token", help="token from a previous login; use with --userid")
     return ap.parse_args(argv)
 
 
