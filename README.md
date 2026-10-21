@@ -1,6 +1,6 @@
 # Aqara Device Firmware Query
 
-A python script to query the OTA firmware the Aqara cloud offers for a single device on your account, identified by its DID. It prints the server's response as returned.
+A python script to query and download the OTA firmware the Aqara cloud offers for devices linked on your account. It prints the server's response as returned and offers and optional download.
 
 ## Usage
 
@@ -193,7 +193,7 @@ The metadata file includes your device DID, device name and home/room names (`re
 ## Aqara Firmware Archive
 
 If you have downloaded a firmware missing from the Aqara Firmware Archive, please contribute it 
-via a[pull request](https://github.com/absent42/Aqara-Firmware-Archive/pulls).
+via a [pull request](https://github.com/absent42/Aqara-Firmware-Archive/pulls).
 
 ## Disclaimer
 
