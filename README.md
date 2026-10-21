@@ -190,6 +190,11 @@ The metadata file includes your device DID, device name and home/room names (`re
 - Some devices get more than one file. For example the Presence Sensor FP2 (`lumi.motion.agl001`) receives its radar firmware as a separate `zigbee` entry.
 - For use from Python, `AqaraClient` wraps a session: `AqaraClient.login(host, username, password)`, then `devices()`, `firmware(did)`, `offers(response)` and `download(offer, directory)`. `download()` only saves and verifies the firmware; the metadata file is written by the command-line script.
 
+## Aqara Firmware Archive
+
+If you have downloaded a firmware missing from the Aqara Firmware Archive, please contribute it 
+via a[pull request](https://github.com/absent42/Aqara-Firmware-Archive/pulls).
+
 ## Disclaimer
 
 For interoperability with devices you own. Not affiliated with, endorsed by, or supported by Aqara. Use at your own risk. Flashing incorrect firmware may brick a device.
